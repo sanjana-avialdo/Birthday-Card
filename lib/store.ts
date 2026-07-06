@@ -1,56 +1,92 @@
-import { Redis } from "@upstash/redis";
+import postgres from "postgres";
 import type { CardData } from "./types";
 
-const CARD_TTL_SECONDS = 60 * 60 * 24 * 365; // 1 year
 const ID_LENGTH = 8;
 const MAX_CREATE_ATTEMPTS = 5;
 
-let client: Redis | null = null;
+let sql: ReturnType<typeof postgres> | null = null;
+let schemaReady: Promise<void> | null = null;
 
-function getRedis(): Redis {
-  if (client) return client;
+function getSql() {
+  if (sql) return sql;
 
-  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  const connectionString =
+    process.env.POSTGRES_URL ?? process.env.DATABASE_URL ?? process.env.POSTGRES_PRISMA_URL;
 
-  if (!url || !token) {
+  if (!connectionString) {
     throw new Error(
-      "Missing Redis credentials. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN " +
-        "(see .env.local.example) — get a free database at https://upstash.com."
+      "Missing Postgres connection string. Set POSTGRES_URL (see .env.local.example) — " +
+        "on Vercel/Supabase, this is injected automatically once the integration is connected."
     );
   }
 
-  // We only ever issue one command per request, so auto-pipelining (batching
-  // concurrent commands into /pipeline) has no upside here and just adds risk.
-  client = new Redis({ url, token, enableAutoPipelining: false });
-  return client;
+  sql = postgres(connectionString, {
+    // Supabase's connection-pooler runs in transaction mode, which doesn't
+    // support prepared statements across queries.
+    prepare: false,
+    // One query at a time per request — no need for a bigger pool per instance.
+    max: 1,
+  });
+  return sql;
+}
+
+// Lazily created on first use so there's no separate migration step to run —
+// memoized per warm serverless instance, so it's a no-op after the first call.
+async function ensureSchema(): Promise<void> {
+  if (!schemaReady) {
+    const client = getSql();
+    schemaReady = client`
+      CREATE TABLE IF NOT EXISTS cards (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `.then(() => undefined);
+  }
+  await schemaReady;
 }
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, ID_LENGTH);
 }
 
-function keyFor(id: string): string {
-  return `card:${id}`;
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
 }
 
 export async function saveCard(data: CardData): Promise<string> {
-  const redis = getRedis();
+  const client = getSql();
+  await ensureSchema();
+  const json = JSON.stringify(data);
 
   for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
     const id = generateId();
-    const created = await redis.set(keyFor(id), data, {
-      nx: true,
-      ex: CARD_TTL_SECONDS,
-    });
-    if (created) return id;
+    try {
+      await client`INSERT INTO cards (id, data) VALUES (${id}, ${json})`;
+      return id;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+    }
   }
 
   throw new Error("Could not generate a unique link, please try again.");
 }
 
 export async function getCard(id: string): Promise<CardData | null> {
-  const redis = getRedis();
-  const data = await redis.get<CardData>(keyFor(id));
-  return data ?? null;
+  const client = getSql();
+  await ensureSchema();
+  const rows = await client`SELECT data FROM cards WHERE id = ${id}`;
+  const row = rows[0] as { data: string } | undefined;
+  if (!row) return null;
+
+  try {
+    return JSON.parse(row.data) as CardData;
+  } catch {
+    return null;
+  }
 }
