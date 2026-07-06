@@ -119,7 +119,7 @@ export default function BuilderPage() {
                 <input
                   value={data.name}
                   onChange={(e) => set("name", e.target.value)}
-                  placeholder="Parkash"
+                  placeholder="Enter Name"
                   className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-pink-400 focus:outline-none focus:ring-2 focus:ring-pink-100"
                 />
               </div>
