@@ -122,8 +122,14 @@ export function BirthdayCard({
                 initial={{ scale: 0.8, rotate: -6, opacity: 0 }}
                 animate={{ scale: 1, rotate: -3, opacity: 1 }}
                 transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
-                className="h-36 w-36 overflow-hidden rounded-2xl p-1.5 sm:h-44 sm:w-44"
-                style={{ background: theme.accent }}
+                className="overflow-hidden rounded-2xl p-1.5"
+                style={{
+                  background: theme.accent,
+                  aspectRatio: String(data.imageAspect ?? 1),
+                  ...((data.imageAspect ?? 1) >= 1
+                    ? { width: "clamp(9rem, 30vw, 11rem)", height: "auto" }
+                    : { height: "clamp(9rem, 30vw, 11rem)", width: "auto" }),
+                }}
               >
                 {/* data URLs / arbitrary remote photos — next/image can't optimize these reliably */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -16,6 +16,11 @@ function normalizeDateMode(value: string | undefined): DateMode {
   return value === "together" ? "together" : "countdown";
 }
 
+function normalizeImageAspect(value: string | undefined): number {
+  const parsed = value ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? Math.min(1.8, Math.max(0.6, parsed)) : DEFAULT_CARD_DATA.imageAspect;
+}
+
 export function decodeCardData(sp: SearchParamsInput): CardData {
   return {
     name: first(sp.n) || DEFAULT_CARD_DATA.name,
@@ -26,5 +31,6 @@ export function decodeCardData(sp: SearchParamsInput): CardData {
     theme: normalizeTheme(first(sp.th)),
     song: first(sp.s) || DEFAULT_CARD_DATA.song,
     image: first(sp.img) || DEFAULT_CARD_DATA.image,
+    imageAspect: normalizeImageAspect(first(sp.ia)),
   };
 }

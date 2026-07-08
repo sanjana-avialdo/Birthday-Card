@@ -1,15 +1,16 @@
 "use client";
 
 // The photo is stored server-side (not embedded in the URL), so it just needs
-// to stay well under the API's storage cap (see MAX_IMAGE_LENGTH in
-// app/api/cards/route.ts) — we shrink only if the first pass comes in large.
-const TARGET_DATA_URL_LENGTH = 700_000;
+// to stay under the API's storage cap (see MAX_IMAGE_LENGTH in
+// app/api/cards/route.ts, 1_500_000) — we shrink only if the first pass comes
+// in large, and keep the target close to that cap so quality stays high.
+const TARGET_DATA_URL_LENGTH = 1_400_000;
 const ATTEMPTS: Array<{ maxDim: number; quality: number }> = [
-  { maxDim: 1080, quality: 0.82 },
+  { maxDim: 1600, quality: 0.9 },
+  { maxDim: 1280, quality: 0.85 },
+  { maxDim: 1080, quality: 0.8 },
   { maxDim: 900, quality: 0.75 },
   { maxDim: 720, quality: 0.7 },
-  { maxDim: 560, quality: 0.65 },
-  { maxDim: 400, quality: 0.6 },
 ];
 
 function loadImageElement(file: File): Promise<HTMLImageElement> {
@@ -35,11 +36,21 @@ function drawToDataUrl(img: HTMLImageElement, maxDim: number, quality: number): 
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas not supported");
+  // Browsers default to low-quality (nearly nearest-neighbor) downscaling,
+  // which looks soft/blurry for large source photos — force bicubic-quality smoothing.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, width, height);
   return canvas.toDataURL("image/jpeg", quality);
 }
 
-export async function fileToResizedDataUrl(file: File): Promise<string> {
+export interface ResizedImage {
+  dataUrl: string;
+  // width / height, clamped so the display frame never gets absurdly wide or tall
+  aspect: number;
+}
+
+export async function fileToResizedDataUrl(file: File): Promise<ResizedImage> {
   const img = await loadImageElement(file);
 
   let best = drawToDataUrl(img, ATTEMPTS[0].maxDim, ATTEMPTS[0].quality);
@@ -48,5 +59,8 @@ export async function fileToResizedDataUrl(file: File): Promise<string> {
     best = dataUrl;
     if (dataUrl.length <= TARGET_DATA_URL_LENGTH) break;
   }
-  return best;
+
+  const rawAspect = img.naturalWidth / img.naturalHeight;
+  const aspect = Math.min(1.8, Math.max(0.6, rawAspect));
+  return { dataUrl: best, aspect };
 }

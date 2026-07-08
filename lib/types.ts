@@ -16,6 +16,7 @@ export interface CardData {
   theme: ThemeId;
   song: string;
   image: string; // data URI or remote URL
+  imageAspect: number; // width / height, clamped to [0.6, 1.8]
 }
 
 export const DEFAULT_CARD_DATA: CardData = {
@@ -27,4 +28,5 @@ export const DEFAULT_CARD_DATA: CardData = {
   theme: "theme-midnight",
   song: "",
   image: "",
+  imageAspect: 1,
 };

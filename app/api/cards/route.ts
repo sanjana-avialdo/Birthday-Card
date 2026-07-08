@@ -28,6 +28,11 @@ export async function POST(request: Request) {
     ? (body.theme as CardData["theme"])
     : DEFAULT_THEME;
 
+  const imageAspect =
+    typeof body.imageAspect === "number" && Number.isFinite(body.imageAspect)
+      ? Math.min(1.8, Math.max(0.6, body.imageAspect))
+      : 1;
+
   const data: CardData = {
     name: str(body.name, MAX_SHORT_LENGTH),
     title: str(body.title, MAX_SHORT_LENGTH),
@@ -37,6 +42,7 @@ export async function POST(request: Request) {
     theme,
     song: str(body.song, MAX_SHORT_LENGTH * 2),
     image,
+    imageAspect,
   };
 
   try {

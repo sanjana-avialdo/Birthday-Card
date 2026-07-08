@@ -55,8 +55,9 @@ export default function BuilderPage() {
       return;
     }
     try {
-      const dataUrl = await fileToResizedDataUrl(file);
-      set("image", dataUrl);
+      const { dataUrl, aspect } = await fileToResizedDataUrl(file);
+      setData((d) => ({ ...d, image: dataUrl, imageAspect: aspect }));
+      setShortId(null);
       setImgError("");
     } catch {
       setImgError("Couldn't read that image — try a different file.");
