@@ -37,7 +37,8 @@ export function useCountdown(dateStr: string, mode: DateMode): CountdownResult {
     return () => clearInterval(id);
   }, []);
 
-  const target = dateStr ? new Date(`${dateStr}T00:00:00`).getTime() : NaN;
+  // Australia/Darwin (ACST) has a fixed UTC+9:30 offset year-round, no DST.
+  const target = dateStr ? new Date(`${dateStr}T00:00:00+09:30`).getTime() : NaN;
   const valid = Number.isFinite(target);
 
   if (!valid || now === null) {
